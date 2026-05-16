@@ -2,7 +2,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 from db_config import engine
 
-FILE_PATH = "data/MyBank Data.xlsx"
+FILE_PATH = "data/MyBank Data Baru.xlsx"
 
 # EXTRACT
 def extract():
@@ -39,6 +39,30 @@ def transform(df_users, df_merchants, df_trx, df_inter):
 
     # USERS
     users = df_users.copy()
+    if 'jenis_kelamin' not in users.columns:
+        if 'gender' in users.columns:
+            users['jenis_kelamin'] = users['gender']
+        else:
+            users['jenis_kelamin'] = pd.NA
+
+    users['jenis_kelamin'] = (
+        users['jenis_kelamin']
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+
+    mapping_gender = {
+        'l': 'Laki-laki',
+        'p': 'Perempuan',
+        'male': 'Laki-laki',
+        'female': 'Perempuan',
+        'm': 'Laki-laki',
+        'f': 'Perempuan'
+    }
+
+    users['jenis_kelamin'] = users['jenis_kelamin'].map(mapping_gender)
+    users = users.dropna(subset=['jenis_kelamin'])
     users = users.dropna(subset=['no_rek'])
     users['saldo'] = pd.to_numeric(users['saldo'], errors='coerce')
 
@@ -47,8 +71,6 @@ def transform(df_users, df_merchants, df_trx, df_inter):
             users[col] = pd.to_datetime(users[col], errors='coerce', dayfirst=True)
 
     users = users.drop_duplicates('no_rek')
-
-    # DROP rows yang rusak
     users = users.dropna(subset=['nama'])
 
     # MERCHANTS
@@ -65,7 +87,6 @@ def transform(df_users, df_merchants, df_trx, df_inter):
         transactions['tanggal_transaksi'], errors='coerce', dayfirst=True
     )
 
-    # drop transaksi yang tidak valid
     transactions = transactions.dropna(subset=['tanggal_transaksi','nominal'])
     transactions = transactions.drop_duplicates('trx_id')
 
@@ -73,7 +94,7 @@ def transform(df_users, df_merchants, df_trx, df_inter):
     transactions = transactions[
         transactions['no_rek'].isin(users['no_rek'])
     ]
-
+    
     transactions = transactions[
         transactions['merchant_id'].isin(merchants['merchant_id'])
     ]
@@ -125,7 +146,7 @@ def load(users, merchants, transactions, interactions):
     transactions.to_sql('transactions', con=engine, if_exists='append', index=False)
     interactions.to_sql('interactions', con=engine, if_exists='append', index=False)
 
-    print("DATA BERHASIL DI-REFRESH TANPA ERROR FK")
+    print("DATA BERHASIL MASUK KE DATABASE")
 
 # MAIN
 def main():
@@ -134,7 +155,6 @@ def main():
         df_users, df_merchants, df_trx, df_inter
     )
     load(users, merchants, transactions, interactions)
-
 
 if __name__ == "__main__":
     main()
